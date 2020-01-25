@@ -1,0 +1,34 @@
+{
+  "author": "Andrew Gould",
+  "bundleDependencies": false,
+  "dependencies": {
+    "request": "^2.81.0",
+	"rinnai-touch-python-interface": "git+https://github.com/andrewgould/rinnai-touch-python-interface.git#master"
+  },
+  "deprecated": false,
+  "description": "Homebridge plugin to control the Rinnai Touch interface for heating/cooling systems",
+  "engines": {
+    "homebridge": ">=0.4.0",
+    "node": ">=8.6.0"
+  },
+  "homepage": "https://github.com/andrewgould/homebridge-rinnai-touch#readme",
+  "keywords": [
+    "homebridge-plugin",
+    "homekit",
+    "brivis",
+    "rinnai",
+    "heating",
+    "air conditioner"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "name": "homebridge-rinnai-touch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewgould/homebridge-rinnai-touch.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "1.0.0"
+}

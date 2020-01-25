@@ -1,0 +1,62 @@
+{
+   "pluginAlias":"RinnaiTouch",
+   "pluginType":"accessory",
+   "singular":true,
+   "headerDisplay":null,
+   "schema":{
+      "type":"object",
+      "properties":{
+          "name":{
+             "title":"Accessory Name",
+             "type":"string",
+             "format":"string",
+             "placeholder":"Rinnai Touch",
+             "minLength": 1,
+             "required": true
+          },
+         "ip":{
+            "title":"IP Address",
+            "type":"string",
+            "placeholder":"192.168.1.150",
+            "minLength": 1,
+            "required": true
+         },
+         "debug":{
+            "title":"Debug logging",
+            "type":"boolean",
+            "description":"Turns on additional logging (can be helpful for diagnosing issues)"
+         }
+      }
+   },
+   "layout":[
+       {
+          "type":"flex",
+          "flex-flow":"row wrap",
+          "items":[
+             "name"
+          ]
+       },
+      {
+         "type":"flex",
+         "flex-flow":"row wrap",
+         "items":[
+            {
+               "key":"email",
+               "type":"email"
+            },
+            {
+               "key":"password",
+               "type":"password"
+            }
+         ]
+      },
+      {
+         "type":"fieldset",
+         "title":"Advanced configuration",
+         "expandable":true,
+         "items":[
+            "debug"
+         ]
+      }
+   ]
+}
