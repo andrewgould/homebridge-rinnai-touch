@@ -106,27 +106,25 @@ RinnaiTouch.prototype = {
 					this.hcService.getCharacteristic(Characteristic.CurrentHeaterCoolerState).updateValue(Characteristic.CurrentHeaterCoolerState.COOLING);
 					this.hcService.getCharacteristic(Characteristic.CurrentHeatingCoolingState).updateValue(Characteristic.CurrentHeatingCoolingState.COOLING);
 					this.hcService.getCharacteristic(Characteristic.TargetHeaterCoolerState).updateValue(Characteristic.TargetHeaterCoolerState.COOL);
+					
+					this.values.CurrentTemperature = data.Cooling.SetTemp;
+					this.hcService.getCharacteristic(Characteristic.ThresholdTemperature).updateValue(this.values.CurrentTemperature);
+					this.hcService.getCharacteristic(Characteristic.CurrentTemperature).updateValue(this.values.CurrentTemperature);
 					break;
 				
 				case 'HEATING':
 					this.hcService.getCharacteristic(Characteristic.CurrentHeaterCoolerState).updateValue(Characteristic.CurrentHeaterCoolerState.HEATING);
 					this.hcService.getCharacteristic(Characteristic.CurrentHeatingCoolingState).updateValue(Characteristic.CurrentHeatingCoolingState.HEATING);
 					this.hcService.getCharacteristic(Characteristic.TargetHeaterCoolerState).updateValue(Characteristic.TargetHeaterCoolerState.HEAT);
+					
+					this.values.CurrentTemperature = data.Heating.SetTemp;
+					this.hcService.getCharacteristic(Characteristic.ThresholdTemperature).updateValue(this.values.CurrentTemperature);
+					this.hcService.getCharacteristic(Characteristic.CurrentTemperature).updateValue(this.values.CurrentTemperature);
 					break;
 				
 				default:
 					this.hcService.getCharacteristic(Characteristic.CurrentHeaterCoolerState).updateValue(Characteristic.CurrentHeaterCoolerState.INACTIVE);
 					this.hcService.getCharacteristic(Characteristic.CurrentHeatingCoolingState).updateValue(Characteristic.CurrentHeatingCoolingState.OFF);
-			}
-
-			switch (data.System.CurrentMode) {
-				case 'COOLING':
-					this.hcService.getCharacteristic(Characteristic.ThresholdTemperature).updateValue(data.Cooling.SetTemp);
-					break;
-					
-				case 'HEATING':
-					this.hcService.getCharacteristic(Characteristic.ThresholdTemperature).updateValue(data.Heater.SetTemp);
-					break;
 			}
 		});
 	},

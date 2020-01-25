@@ -41,12 +41,8 @@
          "flex-flow":"row wrap",
          "items":[
             {
-               "key":"email",
-               "type":"email"
-            },
-            {
-               "key":"password",
-               "type":"password"
+               "key":"ip",
+               "type":"string"
             }
          ]
       },
