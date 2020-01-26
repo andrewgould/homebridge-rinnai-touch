@@ -3,7 +3,7 @@
   "bundleDependencies": false,
   "dependencies": {
     "request": "^2.81.0",
-	"rinnai-touch-python-interface": "https://github.com/andrewgould/rinnai-touch-python-interface.git#master"
+    "rinnai-touch-python-interface": "https://github.com/andrewgould/rinnai-touch-python-interface.git#master"
   },
   "deprecated": false,
   "description": "Homebridge plugin to control the Rinnai Touch interface for heating/cooling systems",
