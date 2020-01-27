@@ -60,18 +60,20 @@ function RinnaiTouch(log, config) {
   };
 
   this.refreshData();
-  setInterval(this.refreshData, 5000);
 
   this.values = [];
   this.values.Active = this.apiOutput.System.SystemOn
     ? Characteristic.Active.ACTIVE
     : Characteristic.Active.INACTIVE;
-  this.values.CurrentTemperature = this.apiOutput.System.CoolingMode
-    ? this.apiOutput.Cooling.SetTemp
-    : this.apiOutput.Heater.SetTemp;
-  this.values.ThresholdTemperature = this.apiOutput.System.CoolingMode
-    ? this.apiOutput.Cooling.SetTemp
-    : this.apiOutput.Heater.SetTemp;
+  if (this.apiOutput.System.SystemOn) {
+    this.values.ThresholdTemperature = this.apiOutput.System.CoolingMode
+      ? this.apiOutput.Cooling.SetTemp
+      : this.apiOutput.Heater.SetTemp;
+  } else {
+    this.values.ThresholdTemperature = 22;
+  }
+  this.values.CurrentTemperature = this.values.ThresholdTemperature;
+  this.values.CurrentMode = this.apiOutput.System.CurrentMode;
 }
 
 RinnaiTouch.prototype = {
@@ -94,12 +96,29 @@ RinnaiTouch.prototype = {
           this.values.Active = this.apiOutput.System.SystemOn
             ? Characteristic.Active.ACTIVE
             : Characteristic.Active.INACTIVE;
-          this.values.CurrentTemperature = this.apiOutput.System.CoolingMode
-            ? this.apiOutput.Cooling.SetTemp
-            : this.apiOutput.Heater.SetTemp;
-          this.values.ThresholdTemperature = this.apiOutput.System.CoolingMode
-            ? this.apiOutput.Cooling.SetTemp
-            : this.apiOutput.Heater.SetTemp;
+          if (this.apiOutput.System.SystemOn) {
+            this.values.ThresholdTemperature = this.apiOutput.System.CoolingMode
+              ? this.apiOutput.Cooling.SetTemp
+              : this.apiOutput.Heater.SetTemp;
+            this.values.CurrentTemperature = this.apiOutput.System.CoolingMode
+              ? this.apiOutput.Cooling.SetTemp
+              : this.apiOutput.Heater.SetTemp;
+          } else {
+            this.values.CurrentTemperature = 21;
+            this.values.ThresholdTemperature = 22;
+          }
+
+          this.hcService
+            .getCharacteristic(Characteristic.Active)
+            .updateValue(this.values.Active);
+
+          this.hcService
+            .getCharacteristic(Characteristic.CurrentTemperature)
+            .updateValue(this.values.CurrentTemperature);
+
+          this.hcService
+            .getCharacteristic(Characteristic.CoolingThresholdTemperature)
+            .updateValue(this.values.ThresholdTemperature);
         } catch {}
       }.bind(this),
     );
@@ -112,6 +131,11 @@ RinnaiTouch.prototype = {
       .getCharacteristic(Characteristic.Active)
       .on('get', this._getValue.bind(this, 'Active'))
       .on('set', this._setValue.bind(this, 'Active'));
+
+    this.hcService
+      .getCharacteristic(Characteristic.CurrentTemperature)
+      .on('get', this._getValue.bind(this, 'CurrentTemperature'))
+      .on('set', this._setValue.bind(this, 'CurrentTemperature'));
 
     this.hcService
       .getCharacteristic(Characteristic.TargetTemperature)
@@ -143,9 +167,9 @@ RinnaiTouch.prototype = {
 
     this.hcService
       .getCharacteristic(Characteristic.TargetHeaterCoolerState)
-	  .setProps({
-		  validValues: [1, 2]
-	  })
+      .setProps({
+        validValues: [1, 2],
+      })
       .on('set', this._setValue.bind(this, 'TargetHeaterCoolerState'));
 
     this.informationService = new Service.AccessoryInformation();
@@ -171,8 +195,11 @@ RinnaiTouch.prototype = {
         callback(null, this.values.Active);
         break;
 
-      case 'CurrentTemperature':
       case 'ThresholdTemperature':
+        callback(null, this.values.ThresholdTemperature);
+        break;
+
+      case 'CurrentTemperature':
         switch (this.apiOutput.System.CurrentMode) {
           case 'COOLING':
             this.values.CurrentTemperature = this.apiOutput.Cooling.SetTemp;
@@ -180,9 +207,6 @@ RinnaiTouch.prototype = {
             this.hcService
               .getCharacteristic(Characteristic.CoolingThresholdTemperature)
               .updateValue(this.values.ThresholdTemperature);
-            this.hcService
-              .getCharacteristic(Characteristic.CurrentTemperature)
-              .updateValue(this.values.CurrentTemperature);
 
             this.hcService
               .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
@@ -199,10 +223,7 @@ RinnaiTouch.prototype = {
             this.values.CurrentTemperature = this.apiOutput.Heater.SetTemp;
             this.values.ThresholdTemperature = this.apiOutput.Heater.SetTemp;
             this.hcService
-              .getCharacteristic(Characteristic.ThresholdTemperature)
-              .updateValue(this.values.CurrentTemperature);
-            this.hcService
-              .getCharacteristic(Characteristic.CurrentTemperature)
+              .getCharacteristic(Characteristic.HeatingThresholdTemperature)
               .updateValue(this.values.CurrentTemperature);
 
             this.hcService
@@ -242,15 +263,21 @@ RinnaiTouch.prototype = {
     switch (CharacteristicName) {
       case 'Active':
         actionSet = true;
+        switch (this.apiOutput.System.CurrentMode) {
+          case 'COOLING':
+            parameters.push('--mode=cool');
+            break;
+
+          case 'HEATING':
+            parameters.push('--mode=heat');
+        }
         switch (value) {
           case Characteristic.Active.ACTIVE:
             parameters.push('--action=on');
-			parameters.push('--mode=cool');
             break;
 
           default:
             parameters.push('--action=off');
-			parameters.push('--mode=cool');
             break;
         }
         break;
@@ -262,6 +289,7 @@ RinnaiTouch.prototype = {
         switch (value) {
           case Characteristic.TargetHeaterCoolerState.COOL:
             parameters.push('--mode=cool');
+            this.apiOutput.System.CurrentMode = 'COOLING';
             this.hcService
               .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
               .updateValue(3);
@@ -269,6 +297,7 @@ RinnaiTouch.prototype = {
 
           case Characteristic.TargetHeaterCoolerState.HEAT:
             parameters.push('--mode=heat');
+            this.apiOutput.System.CurrentMode = 'HEATING';
             this.hcService
               .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
               .updateValue(2);
@@ -277,12 +306,17 @@ RinnaiTouch.prototype = {
         break;
 
       case 'ThresholdTemperature':
-        if (!actionSet) {
-          parameters.push('--action=on');
-          parameters.push('--mode=cool');
+        parameters.push('--action=on');
+        switch (this.apiOutput.System.CurrentMode) {
+          case 'COOLING':
+            parameters.push('--mode=cool');
+            parameters.push('--coolTemp=' + value);
+            break;
+
+          case 'HEATING':
+            parameters.push('--mode=heat');
+            parameters.push('--heatTemp=' + value);
         }
-        // parameters.push('--heatTemp=' + value);
-        parameters.push('--coolTemp=' + value);
         break;
     }
 
@@ -295,7 +329,12 @@ RinnaiTouch.prototype = {
         this.ip +
         ' ' +
         parameters.join(' '),
-      function(error, stdout, stderr) {},
+      function() {
+        this.hcService
+          .getCharacteristic(Characteristic.StatusFault)
+          .updateValue(Characteristic.StatusFault.NO_FAULT);
+        callback();
+      }.bind(this),
     );
   },
 };
