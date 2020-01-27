@@ -1,6 +1,7 @@
 var request = require('request');
+const {exec} = require('child_process');
 
-var Characteristic, Service, HomebridgeAPI;
+var Characteristic, Service;
 
 module.exports = function(homebridge) {
   Service = homebridge.hap.Service;
@@ -30,6 +31,7 @@ function RinnaiTouch(log, config) {
       EvapMode: false,
       HeaterMode: false,
       SystemOn: false,
+      TestData: true,
     },
     Heater: {
       HeaterOn: false,
@@ -57,18 +59,19 @@ function RinnaiTouch(log, config) {
     Evap: {EvapOn: false, FanOn: false, FanSpeed: 0, WaterPumpOn: false},
   };
 
-  this.refreshData(this.apiOutput);
-  setInterval(
-    function() {
-      this.refreshData(this.apiOutput);
-    }.bind(this),
-    5000,
-  );
+  this.refreshData();
+  setInterval(this.refreshData, 5000);
 
   this.values = [];
-  this.values.Active = Characteristic.Active.INACTIVE;
-  this.values.CurrentTemperature = null;
-  this.values.ThresholdTemperature = null;
+  this.values.Active = this.apiOutput.System.SystemOn
+    ? Characteristic.Active.ACTIVE
+    : Characteristic.Active.INACTIVE;
+  this.values.CurrentTemperature = this.apiOutput.System.CoolingMode
+    ? this.apiOutput.Cooling.SetTemp
+    : this.apiOutput.Heater.SetTemp;
+  this.values.ThresholdTemperature = this.apiOutput.System.CoolingMode
+    ? this.apiOutput.Cooling.SetTemp
+    : this.apiOutput.Heater.SetTemp;
 }
 
 RinnaiTouch.prototype = {
@@ -77,20 +80,27 @@ RinnaiTouch.prototype = {
     callback();
   },
 
-  refreshData: function(apiOutput) {
-    const spawn = require('child_process').spawn;
-    const pythonProcess = spawn('python', [
-      'node_modules/rinnai-touch-python-interface/rinnai-touch-status.py',
-      this.ip,
-    ]);
+  refreshData: function() {
+    exec(
+      'python ' +
+        __dirname +
+        '/node_modules/rinnai-touch-python-interface/rinnai-touch-status.py ' +
+        this.ip,
+      function(error, stdout, stderr) {
+        try {
+          const data = JSON.parse(stdout);
+          this.apiOutput = data.Status;
 
-    pythonProcess.stdout.on(
-      'data',
-      function(dataRaw) {
-        // {"Status": { "System": { "EvapMode":false,"HeaterMode":false,"SystemOn": true },"Heater": { "HeaterOn":false,"FanSpeed": 0,"CirculationFanOn": false,"AutoMode": false,"ManualMode": false,"SetTemp": 0,"ZoneA": false,"ZoneB": false,"ZoneC": false,"ZoneD": false},"Cooling": { "CoolingOn":true,"CirculationFanOn": true,"AutoMode": false,"ManualMode": true,"SetTemp": 20,"ZoneA": true,"ZoneB": false,"ZoneC": false,"ZoneD": false},"Evap": { "EvapOn":false,"FanOn": false,"FanSpeed": 0,"WaterPumpOn": false}}}
-
-        const data = JSON.parse(dataRaw);
-        apiOutput = data.Status;
+          this.values.Active = this.apiOutput.System.SystemOn
+            ? Characteristic.Active.ACTIVE
+            : Characteristic.Active.INACTIVE;
+          this.values.CurrentTemperature = this.apiOutput.System.CoolingMode
+            ? this.apiOutput.Cooling.SetTemp
+            : this.apiOutput.Heater.SetTemp;
+          this.values.ThresholdTemperature = this.apiOutput.System.CoolingMode
+            ? this.apiOutput.Cooling.SetTemp
+            : this.apiOutput.Heater.SetTemp;
+        } catch {}
       }.bind(this),
     );
   },
@@ -133,6 +143,9 @@ RinnaiTouch.prototype = {
 
     this.hcService
       .getCharacteristic(Characteristic.TargetHeaterCoolerState)
+	  .setProps({
+		  validValues: [1, 2]
+	  })
       .on('set', this._setValue.bind(this, 'TargetHeaterCoolerState'));
 
     this.informationService = new Service.AccessoryInformation();
@@ -151,69 +164,22 @@ RinnaiTouch.prototype = {
       this.log('GET', CharacteristicName);
     }
 
-    const spawn = require('child_process').spawn;
-    const pythonProcess = spawn('python', [
-      'node_modules/rinnai-touch-python-interface/rinnai-touch-status.py',
-      this.ip,
-    ]);
-
-    pythonProcess.stdout.on('data', dataRaw => {
-      // {"Status": { "System": { "EvapMode":false,"HeaterMode":false,"SystemOn": true },"Heater": { "HeaterOn":false,"FanSpeed": 0,"CirculationFanOn": false,"AutoMode": false,"ManualMode": false,"SetTemp": 0,"ZoneA": false,"ZoneB": false,"ZoneC": false,"ZoneD": false},"Cooling": { "CoolingOn":true,"CirculationFanOn": true,"AutoMode": false,"ManualMode": true,"SetTemp": 20,"ZoneA": true,"ZoneB": false,"ZoneC": false,"ZoneD": false},"Evap": { "EvapOn":false,"FanOn": false,"FanSpeed": 0,"WaterPumpOn": false}}}
-
-      const data = JSON.parse(dataRaw);
-
-      this.hcService
-        .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-        .updateValue(0);
-
-      switch (data.System.CurrentMode) {
-        case 'COOLING':
-          this.hcService
-            .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-            .updateValue(Characteristic.CurrentHeaterCoolerState.COOLING);
-          this.hcService
-            .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-            .updateValue(Characteristic.CurrentHeatingCoolingState.COOLING);
-          this.hcService
-            .getCharacteristic(Characteristic.TargetHeaterCoolerState)
-            .updateValue(Characteristic.TargetHeaterCoolerState.COOL);
-          break;
-
-        case 'HEATING':
-          this.hcService
-            .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-            .updateValue(Characteristic.CurrentHeaterCoolerState.HEATING);
-          this.hcService
-            .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-            .updateValue(Characteristic.CurrentHeatingCoolingState.HEATING);
-          this.hcService
-            .getCharacteristic(Characteristic.TargetHeaterCoolerState)
-            .updateValue(Characteristic.TargetHeaterCoolerState.HEAT);
-          break;
-
-        default:
-          this.hcService
-            .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-            .updateValue(Characteristic.CurrentHeaterCoolerState.INACTIVE);
-          this.hcService
-            .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-            .updateValue(Characteristic.CurrentHeatingCoolingState.OFF);
-      }
-    });
-
     switch (CharacteristicName) {
       case 'Active':
         this.values.Active = this.apiOutput.System.SystemOn;
+        this.log('GET', 'Active', this.values.Active);
         callback(null, this.values.Active);
         break;
 
       case 'CurrentTemperature':
-        switch (data.System.CurrentMode) {
+      case 'ThresholdTemperature':
+        switch (this.apiOutput.System.CurrentMode) {
           case 'COOLING':
             this.values.CurrentTemperature = this.apiOutput.Cooling.SetTemp;
+            this.values.ThresholdTemperature = this.apiOutput.Cooling.SetTemp;
             this.hcService
-              .getCharacteristic(Characteristic.ThresholdTemperature)
-              .updateValue(this.values.CurrentTemperature);
+              .getCharacteristic(Characteristic.CoolingThresholdTemperature)
+              .updateValue(this.values.ThresholdTemperature);
             this.hcService
               .getCharacteristic(Characteristic.CurrentTemperature)
               .updateValue(this.values.CurrentTemperature);
@@ -231,6 +197,7 @@ RinnaiTouch.prototype = {
 
           case 'HEATING':
             this.values.CurrentTemperature = this.apiOutput.Heater.SetTemp;
+            this.values.ThresholdTemperature = this.apiOutput.Heater.SetTemp;
             this.hcService
               .getCharacteristic(Characteristic.ThresholdTemperature)
               .updateValue(this.values.CurrentTemperature);
@@ -254,7 +221,8 @@ RinnaiTouch.prototype = {
               .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
               .updateValue(Characteristic.CurrentHeaterCoolerState.IDLE);
         }
-        callback(null, this.values.CurrentTemperature);
+        this.log('GET', CharacteristicName, this.values[CharacteristicName]);
+        callback(null, this.values[CharacteristicName]);
         break;
 
       default:
@@ -277,10 +245,12 @@ RinnaiTouch.prototype = {
         switch (value) {
           case Characteristic.Active.ACTIVE:
             parameters.push('--action=on');
+			parameters.push('--mode=cool');
             break;
 
           default:
             parameters.push('--action=off');
+			parameters.push('--mode=cool');
             break;
         }
         break;
@@ -316,11 +286,16 @@ RinnaiTouch.prototype = {
         break;
     }
 
-    const spawn = require('child_process').spawn;
-    const pythonProcess = spawn('python', [
-      'node_modules/rinnai-touch-python-interface/rinnai-touch-client.py',
-      this.ip,
-      ...parameters,
-    ]);
+    this.log('SET', parameters.join(' '));
+
+    exec(
+      'python ' +
+        __dirname +
+        '/node_modules/rinnai-touch-python-interface/rinnai-touch-client.py ' +
+        this.ip +
+        ' ' +
+        parameters.join(' '),
+      function(error, stdout, stderr) {},
+    );
   },
 };
